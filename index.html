@@ -501,7 +501,8 @@ body.mode-wish .row1 > :not(.brand):not(.modes),body.mode-wish .tools,body.mode-
           <option value="">IBM Plex Sans</option><option value="inter">Inter</option><option value="space">Space Grotesk</option><option value="nunito">Nunito</option><option value="serif">Lora (serif)</option><option value="atkinson">Atkinson (legible)</option><option value="mono">JetBrains Mono</option><option value="system">Sistema</option></select></div>
         <div class="pf"><span class="lbl">Datos</span><div class="group">
           <button class="btn" id="btnXlsx" type="button">Exportar Excel</button>
-          <button class="btn" id="btnBak" type="button" title="Guarda tus notas, estados y juegos añadidos en un JSON">Respaldo</button></div></div>
+          <button class="btn" id="btnBak" type="button" title="Guarda tus notas, estados y juegos añadidos en un JSON">Respaldo</button>
+          <button class="btn" id="btnImp" type="button" title="Carga un respaldo (JSON) en esta página">Importar</button><input type="file" id="fileImp" accept=".json,application/json" hidden></div></div>
       </div>
     </div>
   </div>
@@ -1062,6 +1063,27 @@ $('#btnBak').onclick = async () => {
   const data = JSON.stringify({app:'Biblioteca KM', fecha:today(), estado:STATE, anadidos:CUSTOM, deseos:WISH, plataformas:EXTRA_PLATS}, null, 1);
   try { await downloads.save({filename:`Respaldo_Biblioteca_KM_${today()}.json`, data:new Blob([data], {type:'application/json'})}); toast(`Respaldo listo: ${Object.keys(STATE).length} juegos con datos, ${Object.keys(CUSTOM).length} añadidos`); }
   catch (err){ if (err && err.code !== 'declined') toast('No se pudo guardar el respaldo'); }
+};
+
+/* importar respaldo */
+$('#btnImp').onclick = () => { if (!db){ toast('Esta vista no guarda datos'); return; } $('#fileImp').click(); };
+$('#fileImp').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || !db) return;
+  let d; try { d = JSON.parse(await f.text()); } catch (err){ toast('El archivo no es un respaldo válido'); return; }
+  if (!d || typeof d !== 'object'){ toast('El archivo no es un respaldo válido'); return; }
+  const jobs = []; let n = 0;
+  for (const [k, v] of Object.entries(d.estado || {})){ STATE[k] = v; jobs.push(() => writeDoc('state/' + k, v)); }
+  for (const [k, v] of Object.entries(d.anadidos || {})){ CUSTOM[k] = v; jobs.push(() => writeDoc('custom/' + k, v)); }
+  if (d.plataformas && d.plataformas.length) jobs.push(() => writeDoc('config/platforms', {list:d.plataformas, logos:LOGOS}));
+  if (d.moneda && d.moneda.rate > 0){ MON.mode = d.moneda.mode === 'bob' ? 'bob' : 'usd'; MON.rate = +d.moneda.rate; saveMon(); }
+  if (d.deseos) for (const [k, v] of Object.entries(d.deseos)){ WISH[k] = {...(WISH[k] || {}), ...v}; jobs.push(() => writeDoc('wish/' + k, WISH[k])); }
+  render(); renderWish();
+  for (let i = 0; i < jobs.length; i += 15){ await Promise.all(jobs.slice(i, i + 15).map(j => j())); n = Math.min(jobs.length, i + 15); toast(`Importando… ${n}/${jobs.length}`); }
+  if (d.favs && d.favs.length){
+    if (!Object.keys(WISH).length && SEED && SEED.length) await importSeed();
+    await Promise.all(d.favs.map(a => { const id = 'a' + a; if (!WISH[id]) return null; WISH[id] = {...WISH[id], fav:true}; return writeDoc('wish/' + id, WISH[id]); }));
+  }
+  render(); renderWish(); toast(`Listo: ${Object.keys(d.estado || {}).length} estados, ${Object.keys(d.anadidos || {}).length} añadidos, ${(d.favs || []).length} favoritos`);
 };
 
 /* tema */
