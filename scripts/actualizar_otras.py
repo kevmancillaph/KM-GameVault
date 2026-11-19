@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 KEY = os.environ.get("ITAD_KEY", "").strip()
 BASE = "https://api.isthereanydeal.com"
-COUNTRY = "BO"
+COUNTRY = "US"
 STEAM = 61
 LOTE = 50
 
@@ -59,6 +59,7 @@ def main():
 
     inv = {v: k for k, v in ids.items() if v}
     items, fallos, otra_moneda = {}, 0, 0
+    monedas = {}
     lista = list(inv.keys())
     for i in range(0, len(lista), LOTE):
         lote = lista[i:i + LOTE]
@@ -74,6 +75,7 @@ def main():
             for d in g.get("deals", []):
                 tienda = (d.get("shop") or {}).get("name") or ""
                 p = d.get("price") or {}
+                monedas[p.get("currency")] = monedas.get(p.get("currency"), 0) + 1
                 if p.get("currency") != "USD":
                     otra_moneda += 1
                     continue
@@ -90,6 +92,7 @@ def main():
             items[a] = it
         time.sleep(1)
 
+    print("Monedas vistas:", monedas)
     if fallos > len(lista) * 0.3 or otra_moneda > 0 or not items:
         print(f"ABORTO: {fallos} sin respuesta, {otra_moneda} precios en otra moneda, {len(items)} juegos. No se guarda nada.")
         sys.exit(1)
