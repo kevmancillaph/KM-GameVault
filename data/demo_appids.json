@@ -1,0 +1,15 @@
+{
+  "nota": "Demo: 10 juegos con el precio que tenia SteamDB el 2026-10-25 para comparar.",
+  "items": [
+    {"a": 2050650, "n": "Resident Evil 4", "esperado": 7.25},
+    {"a": 1091500, "n": "Cyberpunk 2077", "esperado": 13.49},
+    {"a": 1086940, "n": "Baldur's Gate 3", "esperado": 34.99},
+    {"a": 108600, "n": "Project Zomboid", "esperado": 12.49},
+    {"a": 1030300, "n": "Hollow Knight: Silksong", "esperado": 6.99},
+    {"a": 2379780, "n": "Balatro", "esperado": 7.99},
+    {"a": 264710, "n": "Subnautica", "esperado": 20.99},
+    {"a": 268910, "n": "Cuphead", "esperado": 19.99},
+    {"a": 239030, "n": "Papers, Please", "esperado": 5.79},
+    {"a": 292030, "n": "The Witcher 3: Wild Hunt", "esperado": 34.99}
+  ]
+}
