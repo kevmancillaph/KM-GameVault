@@ -12,6 +12,7 @@ BASE = "https://api.isthereanydeal.com"
 COUNTRY = "US"
 STEAM = 61
 LOTE = 50
+BRL_USD = 4.98
 
 def llamar(ruta, params, cuerpo=None, intentos=3):
     q = "&".join(f"{k}={v}" for k, v in {**params, "key": KEY}.items())
@@ -83,15 +84,40 @@ def main():
                 if amt is None or (d.get("shop") or {}).get("id") == STEAM:
                     continue
                 if tienda == "Nuuvem":
-                    nv = amt if nv is None or amt < nv else nv
-                elif alt is None or amt < alt[0]:
+                    continue
+                if alt is None or amt < alt[0]:
                     alt = (amt, tienda)
             it = {}
             if alt: it["alt"], it["as"] = alt
-            if nv is not None: it["nv"] = nv
             items[a] = it
         time.sleep(1)
 
+    # Nuuvem: catalogo de Brasil (BRL -> USD con tasa fija), que es el que compras
+    nv_ok = 0
+    for i in range(0, len(lista), LOTE):
+        lote = lista[i:i + LOTE]
+        r = llamar("/games/prices/v3", {"country": "BR", "deals": "false", "vouchers": "false"}, lote)
+        if r is None:
+            continue
+        for g in r:
+            a = inv.get(g.get("id"))
+            if a not in items:
+                continue
+            for d in g.get("deals", []):
+                if ((d.get("shop") or {}).get("name") or "") != "Nuuvem":
+                    continue
+                p = d.get("price") or {}
+                amt, mon = p.get("amount"), p.get("currency")
+                if amt is None:
+                    continue
+                if mon == "BRL":
+                    amt = round(amt / BRL_USD, 2)
+                elif mon != "USD":
+                    continue
+                items[a]["nv"] = amt
+                nv_ok += 1
+        time.sleep(1)
+    print("Nuuvem (Brasil):", nv_ok, "juegos")
     print("Monedas vistas:", monedas)
     if fallos > len(lista) * 0.3 or otra_moneda > 0 or not items:
         print(f"ABORTO: {fallos} sin respuesta, {otra_moneda} precios en otra moneda, {len(items)} juegos. No se guarda nada.")
