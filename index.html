@@ -1114,7 +1114,9 @@ function prefMin(w0, pt, pe){
   return pe[3] != null ? pe[3] : null;
 }
 function wishInfo(id, w0){
-  const sm = w0.appid && SEEDMAP[w0.appid];
+  const sm0 = w0.appid && SEEDMAP[w0.appid];
+  const ot = w0.appid && OTRAS && OTRAS[w0.appid];
+  const sm = sm0 && ot ? {...sm0, alt:ot.alt, as:ot.as, nv:ot.nv} : sm0;
   const pr = w0.appid && PRICES && PRICES[w0.appid];
   if (pr && !pr.esp && pr.cur != null){
     w0 = {...w0, cur: pr.cur, dsc: pr.d || 0};
@@ -1210,7 +1212,7 @@ function renderWish(){
   $('#wMoney').textContent = MON.mode === 'bob' ? 'Bs' : 'USD'; $('#wRateL').hidden = MON.mode !== 'bob'; if (document.activeElement !== $('#wRate')) $('#wRate').value = MON.rate;
   $('#wS').value = WF.s; $('#wDir').textContent = WF.d > 0 ? '▲' : '▼';
   const nFav = all.filter(x => x.w.fav).length, nLow = all.filter(x => x.nowLow).length;
-  $('#wSum').textContent = all.length ? `${all.length} en deseos · ${nOk} por debajo de su límite · ${nLow} en mínimo histórico${nFav ? ` · ${nFav} ★` : ''}${list.length !== all.length ? ` · mostrando ${list.length}` : ''}${PRICESDATE ? ` · Steam al ${fmtDate(PRICESDATE)}` : ''}${SEEDDATE ? ` · ${PRICESDATE ? 'otras tiendas' : 'precios'} al ${SEEDDATE}` : ''}` : '';
+  $('#wSum').textContent = all.length ? `${all.length} en deseos · ${nOk} por debajo de su límite · ${nLow} en mínimo histórico${nFav ? ` · ${nFav} ★` : ''}${list.length !== all.length ? ` · mostrando ${list.length}` : ''}${PRICESDATE ? ` · Steam al ${fmtDate(PRICESDATE)}` : ''}${OTRASDATE ? ` · otras tiendas al ${fmtDate(OTRASDATE)}` : SEEDDATE ? ` · ${PRICESDATE ? 'otras tiendas' : 'precios'} al ${SEEDDATE}` : ''}` : '';
   $('#wImport').hidden = !(SEED && SEED.length && db);
   $('#wImport').textContent = all.length ? 'Actualizar precios de SteamDB' : `Importar mi lista de SteamDB (${SEED ? SEED.length : 0})`;
   const rows = list.map(({id, w, l, ok, atLow, reach, nowLow, alt, nv, ml, mls, h3, sel, edi, mlBetter, edm, own}) => {
@@ -1253,7 +1255,8 @@ function wOwned(w){
   return out;
 }
 let SEED = null, SEEDMAP = {}, SEEDDATE = '';
-let PRICES = null, PRICESDATE = '';
+let PRICES = null, PRICESDATE = '', OTRAS = null, OTRASDATE = '';
+fetch('data/otras.json', {cache:'no-cache'}).then(r => r.ok ? r.json() : null).then(d => { if (d && d.items){ OTRAS = d.items; OTRASDATE = d.fecha || ''; renderWish(); } }).catch(() => {});
 fetch('data/precios.json', {cache:'no-cache'}).then(r => r.ok ? r.json() : null).then(d => { if (d && d.items){ PRICES = d.items; PRICESDATE = d.fecha || ''; renderWish(); } }).catch(() => {});
 const W_ASC = new Set(['name','cur','low','gap','year']);
 const wYear = w => w.year ?? (w.appid && SEEDMAP[w.appid] ? SEEDMAP[w.appid].y : null);
