@@ -1,0 +1,14 @@
+Juego                             Esperado     Steam  Mon  Desc  Estado
+------------------------------------------------------------------------------
+Resident Evil 4                       7.25     29.00  USD    0%  dif +21.75
+Cyberpunk 2077                       13.49     44.99  USD    0%  dif +31.50
+Baldur's Gate 3                      34.99     34.99  USD    0%  igual
+Project Zomboid                      12.49     12.49  USD    0%  igual
+Hollow Knight: Silksong               6.99      6.99  USD    0%  igual
+Balatro                               7.99      7.99  USD    0%  igual
+Subnautica                           20.99     20.99  USD    0%  igual
+Cuphead                              19.99     19.99  USD    0%  igual
+Papers, Please                        5.79      5.79  USD    0%  igual
+The Witcher 3: Wild Hunt             34.99     34.99  USD    0%  igual
+------------------------------------------------------------------------------
+Con precio en USD: 10/10
