@@ -495,6 +495,7 @@ body.mode-wish .row1 > :not(.brand):not(.modes),body.mode-wish .tools,body.mode-
         <div class="pf"><span class="lbl">Datos</span><div class="group">
           <button class="btn" id="btnXlsx" type="button">Exportar Excel</button>
           <button class="btn" id="btnSync" type="button" title="Token de GitHub para guardar compras en el repo">Sincronizar</button>
+          <button class="btn" id="btnPend" type="button" title="Sube a GitHub los juegos que marcaste como comprados antes de tener el token">Enviar pendientes</button>
           <button class="btn" id="btnBak" type="button" title="Guarda tus notas, estados y juegos añadidos en un JSON">Respaldo</button>
           <button class="btn" id="btnImp" type="button" title="Carga un respaldo (JSON) en esta página">Importar</button><input type="file" id="fileImp" accept=".json,application/json" hidden></div></div>
       </div>
@@ -1392,25 +1393,35 @@ const GH_REPO = 'kevmancillaph/KM-GameVault', GH_FILE = 'data/compras.json';
 const ghToken = () => { try { return localStorage.getItem('kmGh') || ''; } catch { return ''; } };
 const b64e = t => btoa(String.fromCharCode(...new TextEncoder().encode(t)));
 const b64d = t => new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\n/g, '')), c => c.charCodeAt(0)));
-async function pushCompra(entry){
+const pushCompra = e => pushCompras([e]);
+async function pushCompras(entries){
   const tk = ghToken();
-  if (!tk){ toast('Guardado solo en este dispositivo. Falta el token (Datos → Sincronizar).'); return; }
-  if (!entry.appid){ toast('Sin appid: no se puede pasar a library.json'); return; }
+  if (!tk){ toast('Guardado solo en este dispositivo. Falta el token (Datos → Sincronizar).'); return false; }
+  entries = entries.filter(e => e.appid);
+  if (!entries.length){ toast('Sin appid: no se puede pasar a library.json'); return false; }
   const H = {Authorization:'Bearer ' + tk, Accept:'application/vnd.github+json'}, url = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE;
   try {
     for (let i = 0; i < 3; i++){
       let sha, list = [];
       const g = await fetch(url, {headers:H, cache:'no-store'});
       if (g.status === 200){ const j = await g.json(); sha = j.sha; try { list = JSON.parse(b64d(j.content)); } catch { list = []; } }
-      else if (g.status !== 404){ toast('GitHub rechazó el token (' + g.status + ')'); return; }
-      if (!list.some(x => x.appid === entry.appid)) list.push(entry);
-      const p = await fetch(url, {method:'PUT', headers:{...H, 'Content-Type':'application/json'}, body:JSON.stringify({message:'Compra: ' + entry.name, content:b64e(JSON.stringify(list, null, 1)), ...(sha ? {sha} : {})})});
-      if (p.ok){ toast('Compra enviada. En 1–2 min entra a library.json.'); return; }
-      if (p.status !== 409 && p.status !== 422){ toast('No se pudo enviar (' + p.status + ')'); return; }
+      else if (g.status !== 404){ toast('GitHub rechazó el token (' + g.status + ')'); return false; }
+      for (const entry of entries) if (!list.some(x => x.appid === entry.appid)) list.push(entry);
+      const p = await fetch(url, {method:'PUT', headers:{...H, 'Content-Type':'application/json'}, body:JSON.stringify({message:'Compra: ' + entries.map(e => e.name).join(', ').slice(0, 120), content:b64e(JSON.stringify(list, null, 1)), ...(sha ? {sha} : {})})});
+      if (p.ok){ toast('Enviado. En 1–2 min entra a library.json.'); return true; }
+      if (p.status !== 409 && p.status !== 422){ toast('No se pudo enviar (' + p.status + ')'); return false; }
     }
-    toast('No se pudo enviar: conflicto, intenta de nuevo');
-  } catch { toast('Sin conexión: la compra quedó solo en este dispositivo'); }
+    toast('No se pudo enviar: conflicto, intenta de nuevo'); return false;
+  } catch { toast('Sin conexión: quedó solo en este dispositivo'); return false; }
 }
+$('#btnPend').onclick = async () => {
+  if (!ghToken()){ toast('Primero pega el token en Sincronizar'); return; }
+  const apps = new Set(LIB.map(g => g.appid).filter(Boolean));
+  const ids = Object.keys(CUSTOM).filter(id => { const c = CUSTOM[id]; return c.appid && !c.sync && c.acq !== 'Gratis' && !apps.has(c.appid); });
+  if (!ids.length){ toast('No hay pendientes con appid'); return; }
+  const ents = ids.map(id => { const c = CUSTOM[id]; return {appid:c.appid, name:c.name, plat:c.plat || 'steam', year:c.year ?? null, hours:c.dur ?? null, score:c.ssc ?? null, wsp:c.wsp ?? null, date:c.added ? new Date(c.added).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)}; });
+  if (await pushCompras(ents)){ for (const id of ids){ CUSTOM[id].sync = true; writeDoc('custom/' + id, CUSTOM[id]); } toast(ids.length + ' enviados'); }
+};
 $('#btnSync').onclick = () => {
   const cur = ghToken();
   const v = prompt(cur ? 'Token de GitHub guardado en este dispositivo. Pega uno nuevo, o deja vacío para borrarlo:' : 'Pega el token de GitHub (github_pat_…). Se guarda solo en este navegador:', '');
