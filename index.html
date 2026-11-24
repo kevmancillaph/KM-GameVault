@@ -494,6 +494,7 @@ body.mode-wish .row1 > :not(.brand):not(.modes),body.mode-wish .tools,body.mode-
           <option value="">IBM Plex Sans</option><option value="inter">Inter</option><option value="space">Space Grotesk</option><option value="nunito">Nunito</option><option value="serif">Lora (serif)</option><option value="atkinson">Atkinson (legible)</option><option value="mono">JetBrains Mono</option><option value="system">Sistema</option></select></div>
         <div class="pf"><span class="lbl">Datos</span><div class="group">
           <button class="btn" id="btnXlsx" type="button">Exportar Excel</button>
+          <button class="btn" id="btnSync" type="button" title="Token de GitHub para guardar compras en el repo">Sincronizar</button>
           <button class="btn" id="btnBak" type="button" title="Guarda tus notas, estados y juegos añadidos en un JSON">Respaldo</button>
           <button class="btn" id="btnImp" type="button" title="Carga un respaldo (JSON) en esta página">Importar</button><input type="file" id="fileImp" accept=".json,application/json" hidden></div></div>
       </div>
@@ -661,7 +662,9 @@ function items(){
     out.push(mk(g.id, g, st, {key:g.id, plat:g.plat, acq:g.acq, copies, isCopy:false, custom:false}));
     (g.copies || []).forEach((c, i) => out.push(mk(g.id, g, st, {key:g.id+'~'+i, plat:c.plat, acq:c.acq, copies:[g.plat].concat(copies.filter(x => x !== c.plat)), isCopy:true, custom:false})));
   }
+  const libApps = new Set(LIB.map(g => g.appid).filter(Boolean));
   for (const [id, c] of Object.entries(CUSTOM)){
+    if (c.sync && c.appid && libApps.has(c.appid)) continue;
     const base = {name:c.name, year:c.year, dur:c.dur, sc:c.ssc != null ? {steam:c.ssc} : {}, mins:0, appid:c.appid, wsp:c.wsp};
     const st = {my: c.my ?? c.score, status:c.status, note:c.note, review:c.review, started:c.started, finished:c.finished, durp:c.durp, durc:c.durc};
     out.push(mk(id, base, st, {key:id, plat:c.plat, acq:c.acq || 'Comprado', copies:[], isCopy:false, custom:true}));
@@ -1385,6 +1388,35 @@ $('#wDel').onclick = () => {
   const id = wishEdit; delete WISH[id]; $('#dlgWish').close(); renderWish();
   if (db) db.doc('wish/' + id).delete().catch(() => toast('No se pudo eliminar')); toast('Deseo eliminado');
 };
+const GH_REPO = 'kevmancillaph/KM-GameVault', GH_FILE = 'data/compras.json';
+const ghToken = () => { try { return localStorage.getItem('kmGh') || ''; } catch { return ''; } };
+const b64e = t => btoa(String.fromCharCode(...new TextEncoder().encode(t)));
+const b64d = t => new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\n/g, '')), c => c.charCodeAt(0)));
+async function pushCompra(entry){
+  const tk = ghToken();
+  if (!tk){ toast('Guardado solo en este dispositivo. Falta el token (Datos → Sincronizar).'); return; }
+  if (!entry.appid){ toast('Sin appid: no se puede pasar a library.json'); return; }
+  const H = {Authorization:'Bearer ' + tk, Accept:'application/vnd.github+json'}, url = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE;
+  try {
+    for (let i = 0; i < 3; i++){
+      let sha, list = [];
+      const g = await fetch(url, {headers:H, cache:'no-store'});
+      if (g.status === 200){ const j = await g.json(); sha = j.sha; try { list = JSON.parse(b64d(j.content)); } catch { list = []; } }
+      else if (g.status !== 404){ toast('GitHub rechazó el token (' + g.status + ')'); return; }
+      if (!list.some(x => x.appid === entry.appid)) list.push(entry);
+      const p = await fetch(url, {method:'PUT', headers:{...H, 'Content-Type':'application/json'}, body:JSON.stringify({message:'Compra: ' + entry.name, content:b64e(JSON.stringify(list, null, 1)), ...(sha ? {sha} : {})})});
+      if (p.ok){ toast('Compra enviada. En 1–2 min entra a library.json.'); return; }
+      if (p.status !== 409 && p.status !== 422){ toast('No se pudo enviar (' + p.status + ')'); return; }
+    }
+    toast('No se pudo enviar: conflicto, intenta de nuevo');
+  } catch { toast('Sin conexión: la compra quedó solo en este dispositivo'); }
+}
+$('#btnSync').onclick = () => {
+  const cur = ghToken();
+  const v = prompt(cur ? 'Token de GitHub guardado en este dispositivo. Pega uno nuevo, o deja vacío para borrarlo:' : 'Pega el token de GitHub (github_pat_…). Se guarda solo en este navegador:', '');
+  if (v === null) return;
+  try { if (v.trim()) { localStorage.setItem('kmGh', v.trim()); toast('Token guardado'); } else { localStorage.removeItem('kmGh'); toast('Token borrado'); } } catch { toast('No se pudo guardar el token'); }
+};
 $('#wBought').onclick = () => {
   const w = WISH[wishEdit]; if (!w) return;
   const cid = 'm' + Date.now().toString(36);
@@ -1392,7 +1424,9 @@ $('#wBought').onclick = () => {
   const yr = wYear(w), sm = w.appid && SEEDMAP[w.appid];
   if (w.hours != null) body.dur = w.hours; if (w.score != null) body.ssc = Math.round(w.score) / 10; if (w.note) body.note = w.note;
   if (yr != null) body.year = yr; if (w.appid) body.appid = w.appid; if (sm && sm.cv) body.wsp = sm.i;
+  if (ghToken()) body.sync = true;
   CUSTOM[cid] = body; writeDoc('custom/' + cid, body);
+  pushCompra({appid:w.appid || null, name:w.name, plat:w.plat || 'steam', year:yr, hours:w.hours ?? null, score:w.score != null ? Math.round(w.score) / 10 : null, wsp:(sm && sm.cv) ? sm.i : null, date:new Date().toISOString().slice(0, 10)});
   const id = wishEdit; delete WISH[id]; if (db) db.doc('wish/' + id).delete().catch(() => {});
   $('#dlgWish').close(); renderWish(); render(); toast('Pasado a la biblioteca');
 };

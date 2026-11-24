@@ -1,0 +1,34 @@
+name: Procesar compras
+
+on:
+  push:
+    paths:
+      - "data/compras.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: compras
+  cancel-in-progress: false
+
+jobs:
+  compras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Completar y pasar a library.json
+        run: python scripts/procesar_compras.py
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add library.json data/compras.json
+          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          git commit -m "Compras pasadas a la biblioteca"
+          git pull --rebase
+          git push
