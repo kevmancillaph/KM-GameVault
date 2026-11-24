@@ -1,1 +1,42 @@
-[]
+[
+ {
+  "appid": 874260,
+  "name": "The Forgotten City",
+  "plat": "steam",
+  "year": 2021,
+  "hours": 6,
+  "score": 9.3,
+  "wsp": 211,
+  "date": "2026-11-24"
+ },
+ {
+  "appid": 1458140,
+  "name": "Pacific Drive",
+  "plat": "steam",
+  "year": 2024,
+  "hours": 21.5,
+  "score": 8.2,
+  "wsp": 123,
+  "date": "2026-11-24"
+ },
+ {
+  "appid": 1249040,
+  "name": "American Arcadia",
+  "plat": "steam",
+  "year": 2023,
+  "hours": 6.6,
+  "score": 9,
+  "wsp": 217,
+  "date": "2026-11-24"
+ },
+ {
+  "appid": 2159210,
+  "name": "Just a To the Moon Series Beach Episode",
+  "plat": "steam",
+  "year": 2024,
+  "hours": 2.3,
+  "score": 9.4,
+  "wsp": 139,
+  "date": "2026-11-24"
+ }
+]
