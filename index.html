@@ -889,7 +889,9 @@ function patchGame(id, patch){
     const p = {...patch}; if ('my' in p){ p.score = p.my; delete p.my; }
     const cur = {...CUSTOM[id], ...p}; Object.keys(cur).forEach(k => cur[k] == null && delete cur[k]); CUSTOM[id] = cur; writeDoc('custom/'+id, cur);
   } else {
-    const cur = {...(STATE[id] || {}), ...patch}; Object.keys(cur).forEach(k => (cur[k] == null || cur[k] === '') && delete cur[k]); STATE[id] = cur; writeDoc('state/'+id, cur);
+    const cur = {...(STATE[id] || {}), ...patch}; Object.keys(cur).forEach(k => (cur[k] == null || cur[k] === '') && delete cur[k]);
+    const sy = ['status','started','finished'].some(k => k in patch); if (sy) cur._t = Date.now();
+    STATE[id] = cur; writeDoc('state/'+id, cur); if (sy) queueEstado(id);
   }
   render();
 }
@@ -1414,6 +1416,59 @@ async function pushCompras(entries){
     toast('No se pudo enviar: conflicto, intenta de nuevo'); return false;
   } catch { toast('Sin conexión: quedó solo en este dispositivo'); return false; }
 }
+/* ---------- sincronizar estados (Jugado, Jugando, fechas) entre dispositivos ---------- */
+const EST_FILE = 'data/estados.json', EST_KEYS = ['status','started','finished'];
+let estPend = new Set(), estTimer = null, estBusy = false;
+const estPack = st => { const o = {t: st._t || 1}; if (st.status) o.s = st.status; if (st.started) o.i = st.started; if (st.finished) o.f = st.finished; return o; };
+async function estRead(){
+  const tk = ghToken(), api = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + EST_FILE;
+  if (tk){
+    const g = await fetch(api, {headers:{Authorization:'Bearer ' + tk, Accept:'application/vnd.github+json'}, cache:'no-store'});
+    if (g.status === 404) return {map:{}, sha:null};
+    if (!g.ok) throw new Error(g.status);
+    const j = await g.json(); let map = {}; try { map = JSON.parse(b64d(j.content)); } catch {}
+    return {map, sha:j.sha};
+  }
+  const r = await fetch(EST_FILE + '?v=' + Date.now(), {cache:'no-store'});
+  if (!r.ok) return {map:{}, sha:null};
+  return {map: await r.json().catch(() => ({})), sha:null};
+}
+async function estPull(){
+  if (!db || estBusy) return; estBusy = true;
+  try {
+    const {map, sha} = await estRead(); let ch = 0; const up = [];
+    for (const [id, r] of Object.entries(map)){
+      const loc = STATE[id] || {};
+      if ((r.t || 0) > (loc._t || 0)){
+        const cur = {...loc}; EST_KEYS.forEach(k => delete cur[k]);
+        if (r.s) cur.status = r.s; if (r.i) cur.started = r.i; if (r.f) cur.finished = r.f; cur._t = r.t;
+        STATE[id] = cur; writeDoc('state/' + id, cur); ch++;
+      }
+    }
+    for (const [id, loc] of Object.entries(STATE)){
+      if (!(id in map) && EST_KEYS.some(k => loc[k]) && loc.status !== 'Pendiente') up.push(id);
+      else if (id in map && (loc._t || 0) > (map[id].t || 0)) up.push(id);
+    }
+    if (ch) render();
+    if (up.length && ghToken()){ up.forEach(id => estPend.add(id)); estBusy = false; await estPush(); }
+  } catch (e) {} finally { estBusy = false; }
+}
+function queueEstado(id){ if (!ghToken()) return; estPend.add(id); clearTimeout(estTimer); estTimer = setTimeout(estPush, 2500); }
+async function estPush(){
+  const tk = ghToken(); if (!tk || !estPend.size) return;
+  const ids = [...estPend], api = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + EST_FILE;
+  const H = {Authorization:'Bearer ' + tk, Accept:'application/vnd.github+json'};
+  try {
+    for (let i = 0; i < 3; i++){
+      const {map, sha} = await estRead();
+      for (const id of ids){ const st = STATE[id]; if (!st) continue; const mine = estPack(st); if (!map[id] || mine.t >= (map[id].t || 0)) map[id] = mine; }
+      const p = await fetch(api, {method:'PUT', headers:{...H, 'Content-Type':'application/json'}, body:JSON.stringify({message:'Estados: ' + ids.length, content:b64e(JSON.stringify(map)), ...(sha ? {sha} : {})})});
+      if (p.ok){ ids.forEach(id => estPend.delete(id)); return; }
+      if (p.status !== 409 && p.status !== 422){ toast('No se pudo sincronizar estados (' + p.status + ')'); return; }
+    }
+  } catch { /* sin conexión: queda pendiente, se reintenta al volver a la pestaña */ }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible'){ estPull(); estPush(); } });
 $('#btnPend').onclick = async () => {
   if (!ghToken()){ toast('Primero pega el token en Sincronizar'); return; }
   const apps = new Set(LIB.map(g => g.appid).filter(Boolean));
@@ -1490,6 +1545,7 @@ fetch('library.json').then(r => r.json()).then(d => { LIB = d.games || d; buildF
   db.collection('wish').onSnapshot(s => { const m = {}; s.docs.forEach(x => m[x.id] = x.data()); WISH = m; renderWish(); maybeAutoSeed(); }, () => {});
   db.collection('custom').onSnapshot(s => { const m = {}; s.docs.forEach(x => m[x.id] = x.data()); CUSTOM = m; render(); }, () => {});
   db.doc('config/moneda').onSnapshot(s => { const v = s.exists ? s.data() : null; if (v && v.rate > 0){ MON.mode = v.mode === 'bob' ? 'bob' : 'usd'; MON.rate = +v.rate; try { localStorage.setItem('kmMon', JSON.stringify(MON)); } catch (e) {} renderWish(); } }, () => {});
+  setTimeout(estPull, 800);
   db.doc('config/platforms').onSnapshot(s => { const v = s.exists ? s.data() : {}; EXTRA_PLATS = (v.list || []).slice(); LOGOS = {...DEF_LOGOS, ...(v.logos || {})}; buildFilters(); render(); }, () => {});
   render();
 })();
