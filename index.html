@@ -1451,7 +1451,7 @@ async function estPull(){
     }
     if (ch) render();
     if (up.length && ghToken()){ up.forEach(id => estPend.add(id)); estBusy = false; await estPush(); }
-  } catch (e) {} finally { estBusy = false; }
+  } catch (e) { if (ghToken()) toast('Estados: GitHub rechazó el token (' + (e && e.message || 'sin conexión') + '). Revisa el permiso Contents: Read and write.'); } finally { estBusy = false; }
 }
 function queueEstado(id){ if (!ghToken()) return; estPend.add(id); clearTimeout(estTimer); estTimer = setTimeout(estPush, 2500); }
 async function estPush(){
@@ -1463,10 +1463,10 @@ async function estPush(){
       const {map, sha} = await estRead();
       for (const id of ids){ const st = STATE[id]; if (!st) continue; const mine = estPack(st); if (!map[id] || mine.t >= (map[id].t || 0)) map[id] = mine; }
       const p = await fetch(api, {method:'PUT', headers:{...H, 'Content-Type':'application/json'}, body:JSON.stringify({message:'Estados: ' + ids.length, content:b64e(JSON.stringify(map)), ...(sha ? {sha} : {})})});
-      if (p.ok){ ids.forEach(id => estPend.delete(id)); return; }
+      if (p.ok){ ids.forEach(id => estPend.delete(id)); toast('Estados sincronizados (' + ids.length + ')'); return; }
       if (p.status !== 409 && p.status !== 422){ toast('No se pudo sincronizar estados (' + p.status + ')'); return; }
     }
-  } catch { /* sin conexión: queda pendiente, se reintenta al volver a la pestaña */ }
+  } catch (e) { toast('Estados: no se pudo sincronizar (' + (e && e.message || 'sin conexión') + ')'); }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible'){ estPull(); estPush(); } });
 $('#btnPend').onclick = async () => {
@@ -1481,7 +1481,7 @@ $('#btnSync').onclick = () => {
   const cur = ghToken();
   const v = prompt(cur ? 'Token de GitHub guardado en este dispositivo. Pega uno nuevo, o deja vacío para borrarlo:' : 'Pega el token de GitHub (github_pat_…). Se guarda solo en este navegador:', '');
   if (v === null) return;
-  try { if (v.trim()) { localStorage.setItem('kmGh', v.trim()); toast('Token guardado'); } else { localStorage.removeItem('kmGh'); toast('Token borrado'); } } catch { toast('No se pudo guardar el token'); }
+  try { if (v.trim()) { localStorage.setItem('kmGh', v.trim()); toast('Token guardado. Sincronizando estados…'); estPull(); } else { localStorage.removeItem('kmGh'); toast('Token borrado'); } } catch { toast('No se pudo guardar el token'); }
 };
 $('#wBought').onclick = () => {
   const w = WISH[wishEdit]; if (!w) return;
