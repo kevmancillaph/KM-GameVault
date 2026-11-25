@@ -495,6 +495,7 @@ body.mode-wish .row1 > :not(.brand):not(.modes),body.mode-wish .tools,body.mode-
         <div class="pf"><span class="lbl">Datos</span><div class="group">
           <button class="btn" id="btnXlsx" type="button">Exportar Excel</button>
           <button class="btn" id="btnSync" type="button" title="Token de GitHub para guardar compras en el repo">Sincronizar</button>
+          <button class="btn" id="btnEst" type="button" title="Sincroniza los estados (jugado, jugando) y muestra un diagnóstico">Sincronizar estados</button>
           <button class="btn" id="btnPend" type="button" title="Sube a GitHub los juegos que marcaste como comprados antes de tener el token">Enviar pendientes</button>
           <button class="btn" id="btnBak" type="button" title="Guarda tus notas, estados y juegos añadidos en un JSON">Respaldo</button>
           <button class="btn" id="btnImp" type="button" title="Carga un respaldo (JSON) en esta página">Importar</button><input type="file" id="fileImp" accept=".json,application/json" hidden></div></div>
@@ -1469,6 +1470,20 @@ async function estPush(){
   } catch (e) { toast('Estados: no se pudo sincronizar (' + (e && e.message || 'sin conexión') + ')'); }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible'){ estPull(); estPush(); } });
+$('#btnEst').onclick = async () => {
+  const L = [], tk = ghToken();
+  L.push('Token en este dispositivo: ' + (tk ? 'sí (' + tk.slice(0, 11) + '…)' : 'NO. Pégalo en Sincronizar.'));
+  const loc = Object.entries(STATE).filter(([k, v]) => v.status && v.status !== 'Pendiente');
+  L.push('Juegos con estado aquí: ' + loc.length + ' (jugados: ' + loc.filter(([k, v]) => v.status === 'Jugado').length + ')');
+  try {
+    const r0 = await estRead(); L.push('En GitHub antes: ' + Object.keys(r0.map).length);
+    if (tk){ for (const [id, v] of loc) if (!(id in r0.map) || (v._t || 0) > (r0.map[id].t || 0)) estPend.add(id); await estPush(); }
+    await estPull();
+    const r1 = await estRead(); L.push('En GitHub ahora: ' + Object.keys(r1.map).length);
+    L.push(tk ? 'Listo.' : 'Sin token solo se bajan cambios, no se suben.');
+  } catch (e) { L.push('ERROR: ' + (e && e.message || e) + (tk ? '. Revisa que el token tenga Contents: Read and write sobre KM-GameVault.' : '')); }
+  alert(L.join('\n'));
+};
 $('#btnPend').onclick = async () => {
   if (!ghToken()){ toast('Primero pega el token en Sincronizar'); return; }
   const apps = new Set(LIB.map(g => g.appid).filter(Boolean));
